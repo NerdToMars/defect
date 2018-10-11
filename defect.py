@@ -148,15 +148,45 @@ class DefectDataset(utils.Dataset):
         # [height, width, instance_count]
         info = self.image_info[image_id]
         mask = np.zeros([info["height"], info["width"], len(info["polygons"])],
-                        dtype=np.uint8)
-        for i, p in enumerate(info["polygons"]):
-            # Get indexes of pixels inside the polygon and set them to 1
-            rr, cc = skimage.draw.polygon(p['all_points_y'], p['all_points_x'])
+                        dtype=np.uint8)       
+        class_ids = np.zeros(len(info["regions"]),dtype=np.uint32)
+        for i, region in enumerate(info["regions"]):
+            p = region['shape_attributes']
+            r_classes = region['region_attributes']
+            # print("classes",r_classes)
+            if  r_classes:
+                r_class = r_classes["Class"]
+            else:
+                r_class = 'defects' 
+            # print("r_class",r_class)                
+            p_name = p['name']            
+            if p_name == 'polygon':                
+                # Get indexes of pixels inside the polygon and set them to 1
+                rr, cc = skimage.draw.polygon(p['all_points_y'], p['all_points_x'])
+            elif p_name =='circle':
+                rr, cc = skimage.draw.circle(p['cy'],p['cx'],p['r'])
+            elif p_name =='ellipse':
+                rr,cc = skimage.draw.ellipse(p['cy'],p['cx'],p['ry'],p['rx'])
+            elif p_name =='point':
+                rr,cc = skimage.draw.circle(p['cy'],p['cx'],1)
+            elif p_name =='rect':                
+                rr1, cc1 = [p['y'], p['y']+p['height'], p['y']+p['height'], p['y']], [p['x'], p['x'], p['x']+p['width'], p['x']+p['width']]
+                rr,cc = skimage.draw.polygon(rr1,cc1)
+            else:
+                continue
+            # for ri, r in enumerate(cc):
+            #     if r>1279:
+            #         cc[ri] = 1279
+            #     if rr[ri]>1023:
+            #         rr[ri] = 1023 
             mask[rr, cc, i] = 1
-
+            class_ids[i] = self.class_names.index(r_class)
+            # print("class_id=", class_ids[i])
+                  
+        
         # Return mask, and array of class IDs of each instance. Since we have
         # one class ID only, we return an array of 1s
-        return mask.astype(np.bool), np.ones([mask.shape[-1]], dtype=np.int32)
+        return mask, class_ids
 
     def image_reference(self, image_id):
         """Return the path of the image."""
